@@ -1,0 +1,33 @@
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# === 调研与生产过程材料（非课程内容，不入库）===
+/PLAN.md
+/research/
+/course/research/
+/course/.course-state/
+/course/outline.md
+/course/FDE-outline.md
+/course/render_illustrations.py
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.python-version
+
+# === 编辑器 / IDE ===
+.vscode/
+.idea/
+*.swp
+*~
+
+# === 日志与临时产物 ===
+*.log
+*.tmp
+.tmp/
+.cache/
