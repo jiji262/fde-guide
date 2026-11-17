@@ -18,29 +18,35 @@ author: "anonymous"
 
 先记结论：RAG 不是一门独立主课，它是检索光谱上的第一段。看懵了也没关系，我先给你一张地图，再逐段展开。
 
-这条光谱从左到右是四段：传统 RAG → agentic RAG → agentic search → context architecture。左边最「死板」——一次检索、一次生成；越往右，模型越像个会自己找资料的人，能多轮、能反思、能决定要不要检索。你要学的不是背下每一段，而是知道什么场景落在哪一段。
+这条光谱从左到右其实是五段：**CAG（缓存直塞）→ 传统/混合 RAG → agentic RAG → agentic search → context architecture**。
+
+在动手切块之前，2026 年的 FDE 会先看一眼最左端的 **CAG（Cache-Augmented Generation，缓存增强生成）**：如果客户这批规章手册或产品文档总长度不到 **100K–200K tokens** 且更新不频繁，配合上一讲的 Prompt Caching（命中输入成本打 0.5–1 折），直接整库塞进系统前缀缓存起来，准确率和首字延迟双杀传统 RAG，连向量库都不用建！只有当文档规模远超窗口、或者每天高频变动时，才往右走检索管线。
+
+越往右，模型越像个会自己找资料的人，能多轮、能反思、能决定要不要检索。你要学的不是背下每一段，而是知道什么场景落在哪一段。
 
 ![检索光谱四段：从一次性 RAG 到会自己找资料的 context architecture](assets/L16-retrieval-spectrum.png)
 
-传统 RAG 这一段还是得先吃透，它是你理解后面所有花样的地基。它就三步：切块（chunking）、向量化（embedding）、召回后重排（rerank）。说个你能对上的场景：这就像你把一本厚厚的客户手册撕成一张张便利贴，给每张贴一个「气味标签」，用户来问的时候，你按气味最接近的先抓几张出来，再快速挑出最相关的塞给模型。
+传统与混合 RAG 这一段还是得先吃透，它是你理解后面所有花样的地基。核心三步——切块（chunking）、向量化与混合索引（hybrid indexing）、召回后重排（rerank）——在 2026 年的生产交付里多了两个标配升级：
+1. **Contextual Retrieval（上下文切块增强）**：切完块入库前，先用便宜的快模型给每个 chunk 头部拼上一句“本段摘自《XX 合同》第 X 章，讨论违约金条款”，彻底治好切片断章取义（比如光写“上述费率上浮 5%”却丢了主语）的老毛病；
+2. **Hybrid Search（稠密向量 + BM25 关键词混合召回）**：纯向量检索一碰精确订单号、零件型号（SKU）就抓瞎，生产上必须用向量语义召回拼上全文关键词召回（RRF 融合），再送进 Reranker 精排。
 
 ```python
-# 传统 RAG 三步的骨架（伪代码，说明流程用）
-chunks = split_document(doc, size=512, overlap=64)   # 1. chunking
-vectors = embed(chunks)                              # 2. embedding
-store.upsert(vectors)
+# 生产级 RAG 骨架：Contextual 切片 + 混合召回 + 权限过滤 + Rerank
+chunks = contextualize_and_split(doc, size=512, overlap=64)  # 1. 带上下文前缀切块
+store.upsert_hybrid(chunks, acl_groups=doc.allowed_roles)    # 2. 向量 + BM25 + 权限标签
 
-def answer(query):
-    hits = store.search(embed(query), top_k=20)      # 召回
-    ranked = rerank(query, hits)[:5]                  # 3. rerank
-    return llm(build_prompt(query, ranked))          # 一次生成
+def answer(query, user_roles: list[str]):
+    # 生死红线：召回阶段必须按当前用户 RBAC/ACL 角色过滤！
+    hits = store.hybrid_search(query, filter={"acl": {"$in": user_roles}}, top_k=20)
+    ranked = rerank(query, hits)[:5]                         # 3. rerank 精排
+    return llm(build_prompt(query, ranked))
 ```
 
-这里每一步都有坑，而坑就是 FDE 的活。切块切太大，噪声进来；切太小，语义断掉。重排这一步最容易被新手省掉，但它往往是召回质量从 60 分到 85 分的关键。
+看清上面代码里那行 `filter={"acl": {"$in": user_roles}}` 了吗？这是企业检索的**生死红线：Query-time RBAC/ACL（查询时动态权限过滤）**。还记得第 4 讲提过的 2026 年 10 月国内那起翻车惨案吗？某制造民企花 70 万请团队搭内部知识库，因为没做文档级 ACL 过滤，结果普通员工一搜就调出了高管薪酬表。在 FDE 眼里，不带权限过滤的 RAG 绝对禁止进生产。
 
 ![切块大小的取舍：太大混入噪声，太小切断语义](assets/L16-chunk-size-tradeoff.png)
 
-向量库怎么选，也别一上来就纠结。我的建议很直接：**先用 pgvector 起步**。你手上大概率已经有 Postgres，装个扩展就能跑，数据和业务表在同一个库里，省掉一套运维。等你的数据量、并发、过滤需求真的把 pgvector 压不住了，再去懂 Pinecone、Weaviate 这类专用向量库的取舍——托管省心但要按量付费、要多维护一套系统。传统做法是团队一开工就上专用向量库，结果三个人维护一套用不满的基础设施；FDE 做法是 pgvector 先跑通业务，用真实压力数据去证明「该换了」再换。
+向量库怎么选，也别一上来就纠结。我的建议很直接：**先用 pgvector（配合 Postgres 原生全文检索做 Hybrid）起步**。你手上大概率已经有 Postgres，装个扩展就能跑，数据和业务权限表还在同一个事务里，做 ACL 联表过滤最顺手。等你的数据量到千万级向量、并发真的把 pgvector 压不住了，再去评估 Pinecone、Weaviate、Milvus 或 Qdrant 的取舍。传统做法是团队一开工就上重型专用向量集群，结果三个人维护一套用不满的基础设施；FDE 做法是 pgvector 先跑通业务与权限闭环，用真实压力数据去证明「该换了」再换。
 
 ![先 pgvector 跑通，再用真实压力证明该换专用向量库](assets/L16-pgvector-first.png)
 
@@ -51,9 +57,9 @@ def answer(query):
 传统 RAG 是「先检索、再回答」，一锤子买卖。agentic RAG 把这个动作变成可以反复做的工具：模型看一眼问题，觉得不够，就再检索一次；换个关键词，再检索一次；甚至先检索一批，读完发现方向错了，回头改查询。就像你查资料，很少一次搜索就搞定，通常是搜一下、看两眼、再换词搜——agentic RAG 让模型也这么干。
 
 ```python
-# agentic RAG：把检索包成一个工具，交给模型自己决定何时调、调几次
+# agentic RAG：把带权限隔离的混合检索包成工具，交给模型决定何时调、调几次
 def search_tool(query: str) -> list[str]:
-    hits = store.search(embed(query), top_k=10)
+    hits = store.hybrid_search(query, filter={"acl": {"$in": current_user_roles}}, top_k=10)
     return [h.text for h in rerank(query, hits)[:5]]
 
 # agent 循环里，模型可以多轮调用 search_tool，直到自认为证据够了
@@ -68,13 +74,14 @@ agent = Agent(tools=[search_tool], stop_when="evidence_sufficient")
 
 ![agentic search：零向量库，靠关键词搜索逼近 94.5% 的 RAG 忠实度](assets/L16-agentic-search-zero-vector.png)
 
-我把三段的取舍给你摆一张表，你选型时对着看：
+我把四段的取舍给你摆一张表，你选型时对着看：
 
 | 段位 | 检索次数 | 要不要向量库 | 适合场景 |
 |---|---|---|---|
-| 传统 RAG | 固定一次 | 通常要 | 静态文档库、问答明确 |
-| agentic RAG | 模型决定多次 | 要 | 需要多轮找证据、问题发散 |
-| agentic search | 模型决定多次 | 可不要 | 已有好搜索接口的系统 |
+| CAG（缓存直塞） | 0 次（走前缀缓存） | 不要 | 知识库 `<150K` tokens 且低频更新 |
+| 混合 RAG（Contextual + Hybrid） | 固定一次 | 要（pgvector 优先） | 大规模静态/半静态文档库、高频低延迟问答 |
+| agentic RAG | 模型决定多次 | 要 | 需要多跳找证据、复杂对比分析 |
+| agentic search | 模型决定多次 | 可不要 | 已有成熟全文检索/SQL 接口的业务系统 |
 
 ![三段检索方式的取舍对照表](assets/L16-spectrum-tradeoff-table.png)
 
@@ -82,13 +89,13 @@ agent = Agent(tools=[search_tool], stop_when="evidence_sufficient")
 
 先给判断：光谱的最右端不是「更强的 RAG」，而是压根换了个问法——不再问「怎么检索」，而问「模型这一步该看到什么」。这就是 context architecture，上一讲评测、这一讲检索，其实都在为它服务。
 
-把视角拉高你会发现，检索回来的文档，只是模型上下文里的一层。完整的上下文是好几层叠起来的：系统提示、检索注入、记忆（历史对话、用户偏好）、工具返回、agent 的状态。RAG 负责的，就是「检索注入」这一层。所以「RAG 未死」的准确说法是：**它是 agent 的记忆层**，是 context architecture 里负责「从外部知识调取相关片段」的那块。
+把视角拉高你会发现，检索回来的文档，只是模型上下文里的一层。完整的上下文是好几层叠起来的：系统提示、检索注入、记忆（历史对话、用户偏好）、工具返回、agent 的状态。RAG 负责的，就是「检索注入」这一层。所以「RAG 未死」的准确说法是：**它是 agent 的记忆层**，是 context architecture 里负责「从外部知识调取受权限管控的相关片段」的那块。
 
 ![context architecture 分层：RAG 只是「检索注入」这一层](assets/L16-context-layers.png)
 
-这也是为什么「RAG is dead」是标题党。死掉的不是检索，是「以为搭好一条 chunk-embed-rerank 管线就完事」的心态。传统做法是把 RAG 当终点，管线跑通就交付；FDE 做法是把 RAG 当 context architecture 的一个组件，去问「这一层该注入什么、注入多少、和别的层怎么配合、token 预算够不够」。这也呼应了整门课的换轴——从 prompt engineering 到 context engineering，「prompt engineer」这个职位名基本已经消失了。
+这也是为什么「RAG is dead」是标题党。死掉的不是检索，是「以为搭好一条裸奔的 chunk-embed 管线就完事」的心态。传统做法是把 RAG 当终点，管线跑通就交付；FDE 做法是把检索当 context architecture 的一个组件，先判要不要用 CAG 省掉管线，上了管线就补齐 Contextual 切块、混合检索和 Query-time ACL 权限锁。
 
-对你的实际动作是什么？两条。第一，别再把「我会 RAG」写进简历当卖点，招聘方现在默认你会，他们要看的是你能不能设计整层上下文。第二，你每做一个检索项目，都顺手画一张「上下文架构图」——这一步喂给模型的东西，分别来自哪几层。这张图，就是你区别于「只会调 API」的人的证据。
+对你的实际动作是什么？两条。第一，别再把「我会搭基础 RAG」写进简历当卖点，把「支持 Contextual 混合检索 + 动态 RBAC 权限过滤」亮出来，面试官立刻知道你干过真生产。第二，你每做一个检索项目，都顺手画一张「上下文与权限架构图」——这一步喂给模型的东西来自哪几层、在哪一步做权限裁剪。这张图，就是你区别于「只会调 API」的人的证据。
 
 ## 项目 3：同一份数据，两个版本，一张对比表
 

@@ -74,9 +74,12 @@ MCP 全称 Model Context Protocol。名字唬人，本质特别朴素——它�
 
 一个 MCP server 你要设计三样东西。**工具（tool）**：模型能调的动作，比如"查订单""建工单"，每个工具要有清楚的名字、参数、描述——描述写得烂，模型就不会用或者乱用。**鉴权**：谁能调、调的时候带什么凭证。**错误处理**：调失败了返回什么，模型才能优雅地重试或收手。
 
-别把 MCP 只当个玩具接口。它正在快速企业化，这也是 FDE 该盯的方向。2026 的 roadmap 里有几个关键词你先记住：**Tasks 原语**（把长任务标准化，模型可以发起、轮询、取回一个跑很久的作业）、**SSO/审计**（企业要单点登录，要每一次工具调用都留痕可查）、**水平扩展**。招聘方 JD 里那句"reliable, observable, safe, and auditable from day one"，落到 MCP 上就是这些东西。
+别把 MCP 只当个玩具接口。在 **2026 年下半年，MCP 已正式捐入 Linux 基金会旗下的 Agentic AI Foundation（AAIF）并发布了里程碑式的 `2026-07-28` 核心规范**——这也是近期面试的高频考点：
+- **无状态核心（Stateless Protocol Core）**：移除了早期有状态会话（`Mcp-Session-Id`）和强制初始化握手，彻底解除了企业负载均衡器背后的 Sticky Session（会话粘滞）束缚，Serverless 与多副本水平扩缩容变得跟普通 HTTP 微服务一样丝滑；
+- **Tasks 长任务原语（`SEP-2663`）与渐进式工具发现（Progressive Discovery）**：原生支持异步长耗时作业轮询；当企业内部挂了 200+ 个工具时，支持按需搜索加载而非一次性灌爆 7 万 tokens 上下文（Sierra 在其覆盖全公司 89% 员工的 MCP 网关复盘里还留了句名言 *"Don't fight the weights"*：如果把几百个底层接口全暴露成 MCP 工具反而撑爆窗口，不如收敛成高层业务工具或签发受限只读 Token 调受控 CLI）；
+- **企业级安全红线（OAuth 2.1 / DPoP + 严禁 Token Passthrough）**：MCP Server 必须校验令牌的 `aud` 声明并独立换取下游最小权限凭证，严禁把客户端传来的 Token 原样透传给内网 API（防止 Confused Deputy 糊涂副手攻击）。
 
-顺带说说它的邻居：**Agent Skills**，也就是 SKILL.md。它是 2025 年底成为开放标准的一个格式，用一个 Markdown 文件把"某类任务该怎么干"打包给 agent——相当于给 agent 写一本随手可查的操作手册。MCP 给的是"能调什么系统"，SKILL.md 给的是"遇到这类活儿按什么套路办"。两个一起，才是 Anthropic 那句交付物的完整拼图。
+顺带用一句话帮你理清它的两个邻居：**A2A（Agent2Agent）协议**管的是“横向跨团队/跨厂商智能体之间怎么对话协作”，**MCP** 管的是“纵向智能体怎么调工具和数据”，而 **Agent Skills（`SKILL.md`，2026 年 10 月也已捐入 AAIF）** 则是给智能体写一本按需翻阅的标准操作手册（SOP）。三者各司其职，拼成完整的企业智能体底座。
 
 传统做法和 FDE 做法在这里又分了岔。传统做法是把工具逻辑硬编进某个 agent 脚本里，换个模型、换个客户就得重写。FDE 做法是把能力沉淀成一个独立的 MCP server：一次写好，接进 Claude Code 能用，接进客户的 agent 也能用，交接给客户后他们自己还能维护。这正是 AWS 那句卖点——"离场后客户可自维护"。
 
@@ -84,15 +87,15 @@ MCP 全称 Model Context Protocol。名字唬人，本质特别朴素——它�
 
 ## 项目 4：亲手写一个 MCP server + 带两次 tool call 的 agent
 
-结论先行：这一节的产出物，是你作品集里最能直接对标 Anthropic JD 的一块。你要交付两样东西——一个自己写的 MCP server，一个用 Agent SDK 编排、会连着调至少两个工具的 agent，并且带 guardrails 和 trace。别怕，我给你拆成能照着敲的骨架。
+结论先行：这一节的产出物，是你作品集里最能直接对标 Anthropic JD 的一块。你要交付两样东西——一个自己写的 MCP server，一个用 Claude Agent SDK 编排、会连着调至少两个工具的 agent，并且带 guardrails 和 trace。别怕，我给你拆成能照着跑通的最新骨架。
 
-先写 server。我们用官方的 FastMCP，暴露两个工具：查订单、建工单。注意每个工具的 docstring——那不是注释，那是模型判断"要不要调、怎么调"的唯一依据，你得当 JD 一样认真写。
+先写 server。**特别注意官方 Python `mcp` SDK v2 的大版本变更**：升级到 **`v2.0+`（`pip install "mcp>=2.0"`）**后，已移除早期 `mcp.server.fastmcp` 子模块，统一收敛为 **`from mcp.server.mcpserver import MCPServer`**（如果你偏爱 Prefect 独立维护的第三方 `fastmcp` v3+ 框架，则是装 `fastmcp` 包后写 `from fastmcp import FastMCP`——千万别再混写成旧版的导入路径）。下面我们用官方 `mcp` v2 暴露两个工具：查订单、建工单。注意每个工具的 docstring——那是模型判断"要不要调、怎么调"的核心依据，你得当接口契约一样认真写。
 
 ```python
-# server.py —— 一个最小但能跑的 MCP server
-from mcp.server.fastmcp import FastMCP
+# server.py —— 基于官方 Python mcp SDK v2.x 的最小生产级骨架
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP("order-ops")
+mcp = MCPServer("order-ops")
 
 @mcp.tool()
 def get_order(order_id: str) -> dict:
@@ -111,43 +114,72 @@ def create_ticket(order_id: str, issue: str) -> dict:
     return {"ticket_id": ticket_id}
 
 if __name__ == "__main__":
+    # 本地调试默认走 stdio；部署到企业内网网关时改为 mcp.run(transport="streamable-http")
     mcp.run()
 ```
 
 看清楚一个细节：`create_ticket` 里我先校验订单存不存在，不存在就拒绝。这就是 **guardrail** 的第一层——在工具内部把"不该发生的事"挡在门外，别指望模型永远听话。模型可能幻觉出一个订单号就来建工单，你的 server 得替你守住。
 
-再写 agent。用 Claude Agent SDK 把上面这个 server 接进来，让模型自己决定调哪个工具。真实场景就是一次连调两个：先 `get_order` 查到订单异常，再 `create_ticket` 开工单。这就是 JD 要求的"≥2 tool call"。
+再写 agent。我们用官方 `claude-agent-sdk`（`pip install claude-agent-sdk`）把上面这个 `server.py` 挂进来，通过 `allowed_tools` 显式白名单授权这两个 MCP 工具，让模型自己完成两跳调用：先 `get_order` 查出订单状态，再 `create_ticket` 开售后单。
 
 ```python
-# agent.py —— 连上 MCP server，跑一个两步 tool call 的 agent
-from claude_agent_sdk import Agent, MCPServer
-
-agent = Agent(
-    model="claude-sonnet",
-    mcp_servers=[MCPServer(command="python", args=["server.py"])],
-    system_prompt=(
-        "你是售后助理。只能通过工具查真实数据，"
-        "禁止编造订单或工单号。信息不全时先追问，不要瞎猜。"
-    ),
-    max_tool_calls=6,  # guardrail：封顶调用次数，防失控烧钱
+# agent.py —— 用 claude-agent-sdk 挂载 MCP server，跑通两步 tool call 并采集 trace
+import asyncio
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    ToolUseBlock,
+    query,
 )
 
-result = agent.run("订单 A1023 客户说没收到货，帮我处理一下")
-print(result.text)
-print(result.trace)  # 每一步 tool call 的入参、返回、耗时
+async def main():
+    options = ClaudeAgentOptions(
+        model="claude-sonnet-4-6",
+        system_prompt=(
+            "你是售后助理。只能通过工具查真实数据，"
+            "禁止编造订单或工单号。信息不全时先追问，不要瞎猜。"
+        ),
+        mcp_servers={
+            "order-ops": {"command": "python", "args": ["server.py"]}
+        },
+        allowed_tools=[
+            "mcp__order-ops__get_order",
+            "mcp__order-ops__create_ticket",
+        ],
+        max_turns=6,  # 成本护栏：封顶推理轮数，防死循环烧穿账单
+    )
+
+    trace = []
+    async for message in query(
+        prompt="订单 A1023 客户说没收到货，帮我查下状态并建售后工单",
+        options=options,
+    ):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, ToolUseBlock):
+                    trace.append({"tool": block.name, "input": block.input})
+                elif hasattr(block, "text"):
+                    print(block.text)
+        elif isinstance(message, ResultMessage):
+            print(f"Done in {message.duration_ms}ms | Cost: ${message.total_cost_usd:.4f}")
+
+    print("Tool trace:", trace)
+
+asyncio.run(main())
 ```
 
-这里有两处 guardrail 你别漏。system_prompt 里"禁止编造、信息不全先追问"是**行为护栏**；`max_tool_calls=6` 是**成本护栏**，防止模型陷进死循环把你的 token 账单打爆。生产里这两样缺一不可。
+这里有三处生产级 guardrail 你别漏：system_prompt 里"禁止编造、信息不全先追问"是**行为护栏**；`allowed_tools` 最小权限白名单是**安全护栏**；`max_turns=6` 加 `total_cost_usd` 核算是**成本护栏**。生产里这三样缺一不可。
 
-最后是 **trace**。`result.trace` 把每一次 tool call 的入参、返回、耗时都记下来。这东西为什么重要？因为客户问"你的 agent 上周三那笔为什么建错工单"，你不能靠猜，你得能翻出那次调用的完整轨迹。这就接上了 Cohere JD 那句"observable, auditable from day one"。想更进一步，把 trace 接到 LangSmith 或 Langfuse，截图直接进作品集。
+最后是 **trace**。上面代码把每一步 `ToolUseBlock` 的工具名、入参以及整轮耗时和美元账单都记了下来。这东西为什么重要？因为客户问"你的 agent 上周三那笔为什么建错工单"，你不能靠猜，你得能翻出那次调用的完整轨迹。想更进一步，把 OpenTelemetry / trace 接到内网自托管的 Langfuse v4 或 LangSmith，截图直接进作品集。
 
-我给你把这个项目的验收清单收一下，你照着自查：server 至少两个工具、每个工具有 guardrail；agent 一次任务连调 ≥2 个工具；有行为护栏 + 成本护栏；trace 能完整还原每一步。四条都做到，你手里就有了一块能拿去面试逐条讲的硬货。
+我给你把这个项目的验收清单收一下，你照着自查：server 至少两个工具、每个工具有内部校验 guardrail；agent 一次任务连调 ≥2 个工具；有行为护栏 + 权限白名单 + 成本护栏；trace 能完整还原每一步。四条都做到，你手里就有了一块能拿去面试逐条讲的硬货。
 
 ![项目 4 全景：自写 MCP server 两工具 → Agent SDK 编排两次 tool call → guard](assets/L17-project4-pipeline.png)
 
 ## 小结
 
-这一讲我们做了三件事。先学会克制：大多数任务用固定的 workflow 就够，别上来就搭 agent，最简优先是 FDE 的判断力。再认清编排：LangGraph 是画状态机，CrewAI 是分角色，但底座都是"模型调工具"的 ReAct 循环。最后把 MCP 焊出来：它就是给模型接一个能调你系统的统一插头，你亲手写了 server、用 Agent SDK 跑通两次 tool call，还加了 guardrails 和 trace。这块产出，直接对标 Anthropic 的交付物原文。
+这一讲我们做了三件事。先学会克制：大多数任务用固定的 workflow 就够，别上来就搭 agent，最简优先是 FDE 的判断力。再认清编排：LangGraph 是画状态机，CrewAI 是分角色，底座都是"模型调工具"的循环。最后用 2026 下半年最新的 `mcp` v2 SDK（`MCPServer`）和 `claude-agent-sdk` 把无状态、带三道护栏和全链路 trace 的 MCP 工具链亲手焊了出来。这块产出，直接对标 Anthropic 的交付物原文。
 
 ## 思考题
 

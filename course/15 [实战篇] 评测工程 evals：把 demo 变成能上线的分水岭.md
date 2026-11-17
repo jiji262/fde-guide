@@ -44,15 +44,15 @@ Andrew Ng 有句话我贴在墙上："evals 与 error analysis 是构建 agent �
 
 第一，打分用二元 pass/fail，别用 Likert 五分制。你可能觉得五分更精细。恰恰相反。让你给一个回答打 3 分还是 4 分，你自己下次都打不一样，两个标注员更是对不齐。可"这条到底能不能交给客户"——过还是不过——这个你答得干脆。二元逼你把标准想清楚，也让指标能被复现。
 
-第二，先把失败归类，再想解法。把二十条读完，你会发现错误就那么几类：也许一半是检索没召回对文档，一小撮是格式崩了，剩下是它自己瞎编。这张分布图比任何工具都值钱——它直接告诉你，力气该往哪儿使。
+第二，先把失败归类，再想解法。把二十条读完，你会发现错误就那么几类：也许一半是检索没召回对文档，一小撮是格式崩了，剩下是它自己瞎编。Hamel 和 Shreya 在 2026 年秋正式出版的新书里把这归纳为**“三重鸿沟（Three Gulfs）”**——你没看清真实输入分布叫**理解鸿沟（Comprehension）**，你指令没把边界写死叫**规约鸿沟（Specification）**，模型面对长尾样本稳不住叫**泛化鸿沟（Generalization）**。这张错因分布图比任何工具都值钱——它直接告诉你，力气该往哪儿使。
 
-那什么时候上 LLM-as-judge？就是让一个模型去给另一个模型的输出打分。它能省人力，但你不能闭着眼睛信它。判据很硬：你得先攒 100 条以上你自己标注好的样本，拿它们去校准这个 judge，测它的 TPR 和 TNR——真阳性率和真阴性率。说人话就是：你判过的那些"过"，judge 也判过吗（TPR）；你判的"不过"，它也拦下来了吗（TNR）。
+那什么时候上 LLM-as-judge？就是让一个模型去给另一个模型的输出打分。它能省人力，但你不能闭着眼睛信它。判据很硬：你得先攒 100 条以上你自己标注好的样本，拿它们去校准这个 judge，测它的 TPR 和 TNR——真阳性率和真阴性率。说人话就是：你判过的那些"过"，judge 也判过吗（TPR）；你判的"不过"，它也拦下来了吗（TNR）。同时还要守住两条 2026 生产去偏铁律：**别让同一模型家族既当运动员又当裁判**（防自我偏袒），若做成对比较（Pairwise）必须**正反调换顺序跑两次**，消除模型高达六七成的首位偏好（Positional Bias）。
 
 ![100+ 人工标注做标尺，量 LLM judge 的 TPR/TNR，对齐了才敢用它批量打分](assets/L15-judge-alignment.png)
 
 打个比方。judge 就像你新招的一个质检员。你敢不敢让他独立验货，取决于你先拿一批你亲自验过的货考过他没有。没对过答案的 judge，只是又一个说得很顺的模型——你等于用一个没验过的东西，去验另一个没验过的东西。
 
-对齐之后呢？judge 帮你把评测规模从几十条扩到几千条，你重新拿回了那个凭感觉时丢掉的东西：确定性。改一版 prompt，跑一遍，通过率从 71% 到 78%，白纸黑字。这时候你才算真正开始迭代，而不是打转。
+对齐之后呢？judge 帮你把评测规模从几十条扩到几千条，你重新拿回了那个凭感觉时丢掉的东西：确定性。改一版 prompt，跑一遍，通过率从 71% 到 78%，白纸黑字。如果是客服或金融审批这类不允许偶发抽风的 Agent，还得再盯一个指标——Sierra 提出的 **$pass^k$**（同一条用例连续独立跑 $k$ 次**全部成功**的概率），而不是学术界刷榜爱用的 $pass@k$（试 $k$ 次蒙对 1 次就算过）。这时候你才算真正开始工程迭代，而不是原地打转。
 
 ## 工具四象限和三档资源：别在选型上卡住
 
@@ -63,23 +63,23 @@ Andrew Ng 有句话我贴在墙上："evals 与 error analysis 是构建 agent �
 | 象限 | 代表工具 | 干什么用 |
 |---|---|---|
 | 托管平台 | Braintrust / LangSmith | 云端跑评测、看仪表盘，起步快 |
-| 开源自托管 | Langfuse / Phoenix | 自己部署，数据不出门，适合企业合规 |
-| 离线指标库 | DeepEval / Ragas | 塞进 CI，每次提交自动跑一遍 |
-| 回归与红队 | promptfoo | 批量对比、攻击性测试找漏洞 |
+| 开源自托管 | Langfuse（已并入 ClickHouse，v4 GA）/ Arize Phoenix | 自己部署，MIT/开源协议数据不出门，适合企业合规 |
+| 离线指标库 | DeepEval 4.0（主力）/ Ragas | 塞进 CI，每次提交自动跑回归门禁 |
+| 回归与红队 | promptfoo / DeepTeam / Garak / PyRIT | 批量对比、越狱与注入攻击红队测试 |
 
 ![evals 工具四象限：托管 / 自托管 / 离线指标 / 红队，按用途各取一个](assets/L15-eval-quadrant.png)
 
-行业里一个事实标配是"DeepEval 做 CI + Braintrust 做生产追踪"，你可以直接抄这个组合起步。但这里有个 FDE 必须留意的坑：promptfoo 在 2026 年 3 月已经被 OpenAI 收购、并进它的 Frontier 平台。工具本身没问题，可你作为要嵌进客户环境的人，得替客户想一层——一个评测工具被某个模型厂商收了，独立性上要不要打个问号。这种"帮客户看长远账"的意识，恰恰是 FDE 和普通调包工程师的分界。
+行业里一个事实标配是"DeepEval 做 CI + Braintrust（或内网自托管 Langfuse v4）做生产追踪"，你可以直接抄这个组合起步（早期热门的 Ragas 在 2026 年维护节奏已明显放缓，新项目优先选 DeepEval）。这里还有个 FDE 必须替客户多想一层的坑：`promptfoo` 在 2026 年 3 月已被 OpenAI 收购并入 Frontier 平台——如果客户走多模型中立路线或严禁评测链路绑定单一模型厂，你可以换用厂商中立的开源红队工具 **DeepTeam、NVIDIA Garak 或微软 PyRIT**。这种"帮客户看长远治理账"的意识，恰恰是 FDE 和普通调包工程师的分界。
 
-资源上，我给你三档，按预算挑，免费档就能完整入门：
+资源上，我给你三档，按预算挑，免费档加一本新书就能打通关：
 
 ```text
-免费入门：Braintrust《Evals Foundations》(约 1h) + Hamel《LLM Evals FAQ》(hamel.dev)
-低价系统化：Hamel & Shreya《Evals for AI Engineers》(O'Reilly, 2026-10-31 出版)
-高预算可选：Hamel & Shreya 的 Maven 课 ($4,200，先修要求"已在构建 AI 应用")
+免费入门：Claude Academy《Introduction to evals》+ Braintrust《Evals Foundations》(约 1h) + Hamel《LLM Evals FAQ》
+低价系统化：Hamel & Shreya《Evals for AI Engineers》(O'Reilly，2026 年 10–11 月已正式出版，ai-evals.com)
+高预算可选：Hamel & Shreya 的 Maven 课 ($4,200，仅建议有企业培训预算者考虑)
 ```
 
-看懵了也没关系，这三档你只记一句：**先把免费那门一小时的课刷了，动手建你的第一套 harness，别为 $4,200 那门课卡住。** 顺带说一句，"AI Evals Engineer"现在已经独立成岗了，入门就 $130–173K，还不要求 PhD——这是 FDE 旁边一条现成的相邻入口，你练这套东西不亏。
+看懵了也没关系，这三档你只记一句：**先把免费课刷了、再备一本刚出版的 O'Reilly《Evals for AI Engineers》当案头手册，立刻动手建你的第一套 harness，别为 \$4,200 那门课卡住。** 顺带说一句，"AI Evals Engineer"在 2026 年底已是各大厂与金融医疗机构的独立高薪岗（入门 \$130–173K，资深架构师破 \$300K），还不要求 PhD——你练这套东西稳赚不赔。
 
 ## 项目 2：给一个已有功能，补一条 eval pipeline
 
@@ -93,8 +93,8 @@ Andrew Ng 有句话我贴在墙上："evals 与 error analysis 是构建 agent �
 1. 攒数据集：从真实/仿真输入里取 20+ 条，覆盖你手看时发现的几类失败
 2. error analysis：手读这些 trace，每条写一句失败原因，归类
 3. 定 rubric：把评判标准写成二元 pass/fail，不用 Likert
-4. 建 judge：写个 LLM judge，用 100+ 人工标注对齐，报出 TPR/TNR
-5. 出指标表：改一版实现，跑评测，交出改动前后的通过率对比
+4. 建 judge：写异构模型 LLM judge，用 100+ 人工标注对齐，报出 TPR/TNR
+5. 出指标表：改一版实现，跑评测，交出改动前后的通过率（及关键用例 pass^3）对比
 ```
 
 ![从数据集到指标表的五步流水线，终点是一张 before/after 通过率表](assets/L15-eval-pipeline-steps.png)
@@ -103,11 +103,11 @@ Andrew Ng 有句话我贴在墙上："evals 与 error analysis 是构建 agent �
 
 ![作品集里的王牌一页：一张改动前 71% → 改动后 78% 的通过率对比表](assets/L15-before-after-table.png)
 
-最后落到面试。2026 有个新题型正在普及，叫 agentic eval 设计题，比如："给一个物流改线 agent 设计 eval suite，保证 99% 送达率且不超支。"你要是没系统练过这一套，当场就会露怯；练过，你张口就是 error analysis 先行、二元 rubric、judge 对齐——这就是面试防失分的一环。OpenAI 的面试实测里 evals 权重极高，xAI 一周四轮技术面也躲不开。说白了：会 evals，你多一张别人没有的牌；不会，你就是那个 demo 很漂亮、一问质量保证就哑火的候选人。
+最后落到面试。2026 下半年，agentic eval 设计题已成为区分真假 FDE 的头号分水岭，比如："给一个物流改线 agent 设计 eval suite，保证 99% 送达率且不超支。"你要是没系统练过这一套，当场就会露怯；练过，你张口就是 error analysis 先行、二元 rubric、异构 judge 对齐、$pass^k$ 一致性门禁——这就是面试稳拿高分的杀手锏。
 
 ## 小结
 
-这一讲只讲一件事：evals 是 demo 和上线之间的那道分水岭。模型出错时依然流畅，所以流畅骗不了带 eval 的人。方法论记三条——error analysis 优先、亲手看 20–50 条 trace，二元 pass/fail 不用 Likert，LLM judge 要用 100+ 标注对齐、量 TPR/TNR。工具按四象限各取一个，资源免费档就能入门。然后动手做项目 2：给已有功能补一条 pipeline，交出改动前后的指标表。这张表，是你面试最硬的底牌。
+这一讲只讲一件事：evals 是 demo 和上线之间的那道分水岭。模型出错时依然流畅，所以流畅骗不了带 eval 的人。方法论记四条——error analysis 优先亲手看 20–50 条 trace、二元 pass/fail 不用 Likert、异构 LLM judge 用 100+ 标注对齐 TPR/TNR、高可靠场景看 $pass^k$ 而非 $pass@k$。工具按四象限各取一个，再配刚出版的 O'Reilly《Evals for AI Engineers》即可成体系。动手做完项目 2，交出改动前后的指标表，它就是你面试最硬的底牌。
 
 ## 思考题
 

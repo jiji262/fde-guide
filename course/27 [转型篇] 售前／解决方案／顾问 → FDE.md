@@ -77,7 +77,7 @@ author: "anonymous"
 
 第一个月，目标是让你的手重新变热。
 
-Python 要流利，别停在"能改改脚本"的水平。跟着官方免费主线走:Anthropic Academy 那一串带证书的课，从 Claude 101 到 Building with the Claude API，再到 MCP 入门和 Claude Code。这是零成本起步的官方路线，把证书链攒起来。
+Python 要流利，别停在"能改改脚本"的水平。跟着官方免费主线走:Claude Academy（原 Anthropic Academy，`academy.claude.com`）那一串带证书的课，从 Claude 101 到 Building with the Claude API，再到 MCP 入门和 Claude Code。这是零成本起步的官方路线，把证书链攒起来。
 
 同时做一件反常识但极其有用的事:去读生产事故的 postmortem（事后复盘报告）。你过去做售前，见过系统"应该怎么跑"，但很少见过系统"怎么坏的"。而 FDE 的日常有一大块就是收拾烂摊子。多读几份真实的故障复盘，你会开始用"这里会不会挂"的眼光看代码——这正是从 demo 思维切到生产思维的开关。
 
@@ -140,9 +140,9 @@ Python 要流利，别停在"能改改脚本"的水平。跟着官方免费主�
 
 最后给你一条别人可能没注意的近路。结论:如果你是咨询系出身，你有一个全场最低的技术门槛入口，别错过。
 
-看 Deloitte 那批平台绑定的 FDE 岗，绑 AWS Bedrock、Snowflake Cortex、Microsoft AI Foundry，薪酬 $134.5K–265.1K。它的门槛是什么?3 年工程经验 + **仅 1 年 GenAI 生产经验** + 1 年指定平台。这个"仅 1 年 GenAI"，是我在所有大厂 FDE 里见过的最低技术门槛。对咨询系出身的人，这是最短的一条路。
+看 Deloitte 那批平台绑定的 FDE 岗，绑 AWS Bedrock、Snowflake Cortex、Microsoft AI Foundry，2026 下半年还进一步细化出 Palantir FDE、Anthropic FDE、Databricks FDE 等栈专属通道，薪酬 $134.5K–265.1K。它的门槛是什么?3 年工程经验 + **仅 1 年 GenAI 生产经验** + 1 年指定平台。这个"仅 1 年 GenAI"，是我在所有大厂 FDE 里见过的最低技术门槛。对咨询系出身的人，这是最短的一条路。
 
-而且 Big 4 已经整体入局了。OpenAI 的 DeployCo 那个交付公司，McKinsey、Bain、Capgemini 既是出资方又是合作伙伴;Salesforce 的 FDE Partner Network 开放给了 Accenture、Deloitte、PwC、IBM 等 30 多家伙伴。这意味着什么?咨询公司自己就在成建制地招 FDE、建 FDE 通道。你如果本来就在这类公司体系里，或者履历跟它们对得上，这是一条阻力最小的旁路。
+而且到 2026 下半年，管理咨询与四大已经彻底卷成了一场军备竞赛：OpenAI 的 DeployCo 拉上 McKinsey、Bain、Capgemini 与 BCG 同盟；埃森哲在 2026 年 9 月联合 Google Cloud 组建了含超 **1,000 名 FDE** 的 Gemini 企业业务集团；安永（EY）同期在国内联合火山引擎启动了 **1,000 名 FDE** 培养计划；BCG 开放了校招 FDE 通道，更有管理层联手 Anthropic 砸 15 亿美元成立合资公司 **Ode with Anthropic**；到了 10 月，麦肯锡、贝恩、德勤、埃森哲、凯捷干脆集体进了 Anthropic 投资 1 亿美元打造的 **Claude Frontier Academy** 首期班。这意味着咨询公司自己就在成建制地招 FDE、建 FDE 通道。你如果本来就在这类公司体系里，或者履历跟它们对得上，这是一条阻力最小的旁路。
 
 所以你该做的是:投递时把同义头衔一起搜——Customer Solutions Engineer、Solutions Architect、Deployment Strategist，很多是内部转岗就能过去的;同时把咨询系 JV 和平台绑定岗单独列一条投递线。用你的存量优势，走门槛最低的那扇门。
 

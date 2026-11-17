@@ -20,7 +20,7 @@ author: "anonymous"
 
 先给判断：如果你还把"prompt engineer"当成一个可以求职的方向，赶紧掉头。这个职位名 2026 年基本消失了。不是这门手艺没用了，是它被吸收进一个更大的东西——context engineering。
 
-这词是 Karpathy 造的，Gartner 给了背书，把它称作"2026 突破性 AI 能力"。你别被这种大词唬住。它的意思特别朴素：模型每次回答，看到的不只是你写的那句 prompt，而是一整包上下文。系统提示、检索进来的资料、跨轮次的记忆、工具调用返回的结果、agent 自己的状态——这些加在一起，才决定了模型输出什么。
+这词是 Karpathy 造的，Gartner 给了背书，先是称作"2026 突破性 AI 能力"，接着在 **2026 年 10 月干脆把“Context Engineering Services”单列为独立评估赛道**，北美专职 Context Engineer 年薪已开到 \$200K–\$350K。你别被这种大词唬住。它的意思特别朴素：模型每次回答，看到的不只是你写的那句 prompt，而是一整包上下文。系统提示、检索进来的资料、跨轮次的记忆、工具调用返回的结果、agent 自己的状态——这些加在一起，才决定了模型输出什么。
 
 我给你打个比方。prompt engineering 就像你给一个临时工递了张便条，指望他照着便条把活干好。context engineering 是你给这个人配好了工位：手册在桌上、需要的档案随手能查、上一次谈到哪儿他记得、要用的工具就在手边。同一个人，两种配置，产出天差地别。你觉得哪种更像真实的企业交付？
 
@@ -148,7 +148,10 @@ def run_injection_suite(classify_fn, schema_validator):
 
 **第五步，沉淀模板库。** 把这四件套抽成一个可套用的骨架：一个 `system_prompt.md`、一个 `examples.jsonl`、一个 `schema.json`、一个 `injection_suite.py`。下次换任务，你只改内容不改结构。这就是你和"每次从零调 prompt"那批人的分水岭——他们每次重来，你每次复用。
 
-我提醒你一句成本视角，招聘方是真在看这个。Google 的 JD 里点名要你讲得清 tokens/sec、cost-per-request。你这套模板，顺手就该记一下每次调用的 token 用量和成本。上下文塞得越满不一定越好——检索多灌十篇文档，钱和延迟都上去了，准确率未必涨。什么该进上下文、什么不该进，本身就是 context engineering 的核心权衡。
+我再补两把 2026 下半年生产交付必考的“进阶钥匙”，一个是成本，一个是长对话腐化（Context Rot）：
+
+- **第一把钥匙：Prompt Caching（前缀缓存纪律）**。Google 的 JD 点名要你算清 tokens/sec 和 cost-per-request。2026 年主流模型只要命中 Prompt Cache，输入 Token 成本直接打 **0.5 折到 1 折（立省 90%–95%）**。但缓存命中有个硬前提——**前缀必须严格一致**。所以你在拼上下文时必须严守顺序：**静态内容置顶**（系统提示 → 工具 JSON Schema → 固定业务手册），**动态内容垫底**（当前时间戳、本轮检索结果、用户最新消息），千万别在第一行塞一个每秒都在变的 `current_time` 把整条缓存炸穿；多租户场景下还要加**租户级缓存隔离**，防跨客户串味。
+- **第二把钥匙：长程任务的三阶瘦身**。Agent 跑十几轮工具调用后，很容易陷入“上下文腐化”或“上下文焦虑”。工业界已经收敛出标准三阶疗法：① **Tool Result Clearing**（清理旧轮次几千行的原始工具返回 JSON，只留结论摘要）；② **Compaction**（达到窗口阈值时结构化压缩历史对话）；③ **Context Reset + Handoff Artifact**（跨阶段任务干脆开全新干净窗口，只传一份浓缩的交接状态单，脏活派给独立窗口的 Sub-agent 干完只回传一句话结论）。国内转转等大厂 2026 年的 FDE 线下面试，已经在当场考这套压缩方案设计了。
 
 ![四件套抽成可复用模板库：system_prompt / examples / schema / injection_su](assets/L14-template-library.png)
 
@@ -156,7 +159,7 @@ def run_injection_suite(classify_fn, schema_validator):
 
 ## 小结
 
-这一讲我们把 prompt engineering 换轴到了 context engineering。核心就一句：prompt 只是模型看到的东西里的一层，真正要设计的是系统提示、检索、记忆、工具返回、agent 状态这五层拼成的完整上下文。两个必做动作是结构化输出（用 JSON schema 钉死结果）和防注入（把一切外部内容当数据、不当指令）。动手项目一让你把四件套走通并沉淀成模板库。记住：招聘方不再招"调词的人"，招的是"设计整个上下文的人"。
+这一讲我们把 prompt engineering 换轴到了 context engineering（2026 年 10 月已被 Gartner 列为独立评估赛道）。核心就一句：prompt 只是模型看到的东西里的一层，真正要设计的是系统提示、检索、记忆、工具返回、agent 状态这五层拼成的完整上下文。生产落地的四条硬纪律是：结构化输出（用 JSON schema 钉死结果）、防注入（外部内容一律定界隔离当数据）、Prompt Caching（静态前缀置顶省 90% 成本）和长程三阶瘦身（清工具旧输出 → 压缩 → 重置窗口）。记住：招聘方不再招"调词的人"，招的是"治理整套上下文架构的人"。
 
 下一讲我们聊评测工程 evals——把一个能跑的 demo 变成真能上线的那道分水岭。
 

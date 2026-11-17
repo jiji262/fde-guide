@@ -74,7 +74,7 @@ Baseten 的 FDE 负责人说过一句很扎心的话，大意是"完全没有 AI
 我把节奏按周给你排出来：
 
 ```text
-第 1–2 周   Python 练到流利 + Anthropic Academy 起步（Claude 101 → API）
+第 1–2 周   Python 练到流利 + Claude Academy（原 Anthropic Academy）起步（Claude 101 → API）
 第 3–4 周   端到端 RAG，用 pgvector 起步，把检索跑通
 第 5–6 周   给上面的项目建 eval pipeline：错误分析 + 二元 judge
 第 7–8 周   Agent + MCP：亲手写一个连真实系统的 MCP server

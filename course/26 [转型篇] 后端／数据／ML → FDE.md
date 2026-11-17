@@ -75,11 +75,11 @@ author: "anonymous"
 
 先给判断：你的 90 天转型，重点不是从零学新东西，而是把已有的数据工程肌肉，平移到 chunking/embedding 这类 AI 管线上，同时逼自己主动接一个真正面客的活。
 
-这条路径和别人共用同一个 90 天主干（Anthropic Academy 证书链 → 旗舰项目 → 面试冲刺），差异在于你补短板的重心和你能抄的近道。我按三段给你拆。
+这条路径和别人共用同一个 90 天主干（Claude Academy 证书链 → 旗舰项目 → 面试冲刺），差异在于你补短板的重心和你能抄的近道。我按三段给你拆。
 
 **第 1–30 天：起步，同时把数据优势变现。**
 
-Anthropic Academy 那条免费证书链先走起来：Claude 101 → Building with the Claude API → MCP 入门/进阶 → Agent Skills/Subagents → Claude Code。配上免费的 Braintrust Evals Foundations（大概一小时）。这些对你不难，你的编码底子会让你走得比别人快。
+Claude Academy（原 Anthropic Academy，`academy.claude.com`）那条免费证书链先走起来：Claude 101 → Building with the Claude API → MCP 入门/进阶 → Agent Skills/Subagents → Claude Code。配上免费的 Braintrust Evals Foundations（大概一小时）。这些对你不难，你的编码底子会让你走得比别人快。
 
 关键动作在这里：当别人在学"怎么搭一条 RAG 管线"时，你要意识到 chunking → embedding → 向量存储 → 检索，这套东西的骨架和你天天写的 ETL 几乎一模一样。
 
@@ -138,7 +138,7 @@ def rag_ingestion(documents):
 
 注意几个改写要点：全程用 "I" 不用 "we"；动词换成 JD 里的那批——embed、own、ship、harden、operationalize；把每段经历硬套进那个万能句式：年限 + customer-facing + production LLM experience。你那张第一节列的"我 own 过的系统"清单，现在就派上用场了。
 
-还有个预期修正你得知道：别觉得非要五年经验才够格。Google FDE I、Scale AI、Harvey Founding FDE 都只要两年，微软 IC3 也是两年档。Kanav 24 岁、毕业才三年就进了 Rippling 创始 FDE 团队。国内的话，投云厂商和应用服务商（腾讯云那个"AI 前线部署工程师 FDE"就是 35–65K×15 薪），别去投 DeepSeek、月之暗面这类模型研究公司——它们不设 FDE 岗。
+还有个预期修正你得知道：别觉得非要五年经验才够格。Google FDE I、Scale AI、Harvey Founding FDE 都只要两年，微软 IC3 也是两年档。Kanav 24 岁、毕业才三年就进了 Rippling 创始 FDE 团队。国内的话，首选云厂商和应用服务商——国内大厂约 30% 的 FDE 直接来自内部后端转岗（比如阿里云大批后端转岗百炼 FDE），腾讯云社招挂牌 35–65K×15 薪；至于大模型独角兽，2026 下半年也出现了分化：月之暗面 Kimi、MiniMax、阶跃星辰已低调放出少量战略大客户 FDE 岗，唯独死磕纯研究路线的 **DeepSeek** 依然坚持零 FDE 编制，别投错门。
 
 ## 小结
 
